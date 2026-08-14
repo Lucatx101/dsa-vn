@@ -341,6 +341,55 @@ implementation, not the throwaway probe.
 - `('match', 'current_room')` — int64 (likely remaining foreign room; name doesn't contain "foreign" — verify semantics before wiring into `foreign_flow.yaml`)
 - `('match', 'total_room')` — int64 (likely total foreign room; same caveat)
 
+**Reference price / ceiling / floor — UNRESOLVED, do not pick a column without further
+verification.** The column list in "Root-cause diagnostic" above shows two name candidates in
+different MultiIndex groups for each of three price-band fields:
+
+- `('listing', 'ref_price')` vs `('match', 'reference_price')`
+- `('listing', 'ceiling')` vs `('match', 'ceiling_price')`
+- `('listing', 'floor')` vs `('match', 'floor_price')`
+
+I re-checked this file (grepped every occurrence of `ref_price`, `reference_price`, `ceiling`,
+`floor` — did not re-run the probe) to compare their actual values. The honest result: **the
+comparison this would require isn't available in the recorded transcript.**
+
+- `('listing', 'ceiling')` and `('listing', 'floor')` *do* have recorded values — from the
+  `df.head()` print at the end of "Root-cause diagnostic": FPT ceiling=74000, floor=64400; VNM
+  ceiling=65900, floor=57300.
+- `('listing', 'ref_price')`, `('match', 'reference_price')`, `('match', 'ceiling_price')`, and
+  `('match', 'floor_price')` have **no recorded value anywhere in this file** — only their
+  *names* were captured, via the `columns:` list print. The `df.head()` call that ran right
+  after was truncated by pandas' default column-display width before reaching any of them: the
+  printed table shows only the first 3 columns (`symbol`, `ceiling`, `floor`) and the last 3
+  (`ask_2_volume`, `ask_3_price`, `ask_3_volume`) of 82 total, with everything between collapsed
+  to `...` — which swallowed `ref_price` (4th column) and all three `match`-group price fields
+  (mid-list) without ever printing them.
+
+So for every one of the three pairs, at least one side — and for `ref_price` /
+`reference_price`, both sides — was never captured. That's a different finding from "identical,"
+"differs," or "null for both": it's "not recorded." I'm not guessing which column is right from
+this.
+
+*Minor corroboration, not a substitute for the comparison above*: `listing.ceiling`=74000 and
+`listing.floor`=64400 for FPT are arithmetically consistent with HOSE's ±7% band around a 69,200
+reference price (69,200 × 1.07 = 74,044, rounds down to the 100-VND tick → 74,000; 69,200 × 0.93
+= 64,356, rounds up to the 100-VND tick → 64,400) — and 69,200 is exactly FPT's prior-day close
+already recorded in this file's `Quote.history` tail (`2026-08-13 ... close 69.2`). That confirms
+the `listing` group's ceiling/floor are real, correctly-computed band values. It says nothing
+about `listing.ref_price` itself (never printed), nor about whether the `match`-group namesakes
+agree — that data point simply isn't in this file.
+
+**Before wiring `price_band_risk`**, whoever implements it must run one targeted, offline-safe
+check — not a full re-probe — printing exactly these six fields without truncation, e.g.:
+
+    cols = [("listing", "ref_price"), ("match", "reference_price"),
+            ("listing", "ceiling"), ("match", "ceiling_price"),
+            ("listing", "floor"), ("match", "floor_price")]
+    print(df[cols].to_string())
+
+or `pd.set_option("display.max_columns", None)` before `.head()`. Until that runs, treat both
+candidates in each pair as unverified.
+
 The fetcher will need to flatten these MultiIndex columns (e.g. `flatten_columns=True`, a
 documented `price_board()` kwarg that was not exercised in this probe) or index with the
 2-tuples directly.
