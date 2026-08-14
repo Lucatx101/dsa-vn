@@ -7,6 +7,7 @@ fetcher is written against reality rather than assumption.
 import traceback
 from datetime import date, timedelta
 
+import data_provider  # noqa: F401 - import first: installs the vnstock agent-write guard
 from vnstock import Quote, Trading
 
 SYMBOL = "FPT"
