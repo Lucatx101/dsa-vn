@@ -1,1 +1,16 @@
 .superpowers/
+
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# vnstock's bundled `vnai` package silently (re)writes this file into the
+# project root on every `import vnstock` (see vnstock/__init__.py:190,
+# vnai/beam/agents.py:setup_agent_environment) with unsolicited remote
+# content fetched from vnstocks.com. Not a project file; must never be
+# committed. See docs/vnstock-probe-results.md for details.
+AGENTS.md
