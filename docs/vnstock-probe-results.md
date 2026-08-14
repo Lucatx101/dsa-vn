@@ -396,3 +396,36 @@ documented `price_board()` kwarg that was not exercised in this probe) or index 
 
 **`Trading(source="vci", symbol=...).foreign_trade()`** — confirmed twice, live: raises
 (`tenacity.RetryError` wrapping `NotImplementedError`). Do not call this in the real fetcher.
+
+---
+
+## Reference price / ceiling / floor — RESOLVED (controller, targeted live call)
+
+The fix-round-1 note recorded this as UNRESOLVED because `df.head()` truncated the 82 columns
+before printing. Re-probed with `pd.set_option("display.max_columns", None)` and an explicit
+column selection. Result: **the `listing_*` and `match_*` variants carry identical values.**
+
+| symbol | listing_ref_price | match_reference_price | listing_ceiling | match_ceiling_price | listing_floor | match_floor_price |
+|---|---|---|---|---|---|---|
+| FPT | 69200 | 69200 | 74000 | 74000 | 64400 | 64400 |
+| VNM | 61600 | 61600 | 65900 | 65900 | 57300 | 57300 |
+
+**Use the `listing_*` group** (`listing_ref_price`, `listing_ceiling`, `listing_floor`). Either
+group works; `listing` is the static listing-reference data and reads more naturally.
+
+### The exchange rounds bands to the tick size — our formula is only an approximation
+
+Both symbols are HOSE (±7%), but the published bands are not exactly `ref × 1.07`:
+
+| symbol | ref × 1.07 | published ceiling | ref × 0.93 | published floor |
+|---|---|---|---|---|
+| FPT | 74044 | 74000 | 64356 | 64400 |
+| VNM | 65912 | 65900 | 57288 | 57300 |
+
+The exchange rounds to the tick size (100 VND at these price levels), so a computed band can be
+off by up to roughly half a tick in either direction.
+
+**Consequence:** `core.market_profile.ceiling_price()` / `floor_price()` are approximations and
+must not be used to decide "is this price AT the ceiling". Prefer the exchange's own
+`listing_ceiling` / `listing_floor` from the price board whenever they are present, and fall
+back to the computed value only when the board is unavailable.
