@@ -18,3 +18,12 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Every new top-level package/module (data_provider, agent, notification_sender,
+# formatters.py, pipeline.py, main.py, ...) must import in tests without
+# reinstalling. The editable install's PEP 660 finder snapshots a static package
+# map at `pip install -e .` time, so anything created afterward silently fails
+# to import under `pytest` (verified: a package created post-install imports
+# fine under `python -c` because that adds cwd to sys.path, but NOT under the
+# actual `pytest` entry point, which does not). `pythonpath` sidesteps the
+# editable install for tests entirely by adding the repo root directly.
+pythonpath = ["."]
