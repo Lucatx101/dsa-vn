@@ -59,10 +59,13 @@ def _invalid(strategy: Strategy, reason: str, raw: dict | None = None) -> AgentO
 
 def run_strategy(strategy: Strategy, data: TickerData, client) -> AgentOpinion:
     """Run one strategy agent against one ticker."""
-    summary = history_summary(data)
-    user_prompt = strategy.prompt.format(
-        market_rules=market_rules_text(), data_summary=summary
-    )
+    try:
+        summary = history_summary(data)
+        user_prompt = strategy.prompt.format(
+            market_rules=market_rules_text(), data_summary=summary
+        )
+    except Exception as exc:  # noqa: BLE001 - a prompt-building bug, not an API failure
+        return _invalid(strategy, f"prompt construction failed: {exc}")
 
     try:
         response = client.messages.parse(

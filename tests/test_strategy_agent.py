@@ -106,6 +106,21 @@ class TestRunStrategy:
         assert opinion.invalid_signal is True
         assert "rate limited" in (opinion.invalid_reason or "")
 
+    def test_prompt_format_error_is_marked_invalid_and_does_not_raise(self):
+        broken_strategy = Strategy(
+            name="broken",
+            persona="x",
+            prompt="{market_rules} {data_summary} {unexpected}",
+        )
+        client = _client_returning(
+            AgentOpinionOut(signal="hold", confidence=0.5, reasoning="x", key_levels={})
+        )
+        opinion = run_strategy(broken_strategy, _ticker_data(), client)
+
+        assert opinion.invalid_signal is True
+        assert "prompt construction failed" in (opinion.invalid_reason or "")
+        client.messages.parse.assert_not_called()
+
 
 class TestLoadStrategies:
     def test_loads_all_six_strategies(self):
