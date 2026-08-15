@@ -45,6 +45,7 @@ class TestInsufficientConsensusBranches:
     def test_zero_valid_opinions(self):
         result = aggregate([op("a", "nonsense", 0.9), op("b", "buy", 0.9, invalid=True)])
         assert result.final_signal == "hold"
+        assert result.weighted_score == pytest.approx(3.0)
         assert result.confidence == pytest.approx(0.0)
         assert result.consensus_level == "insufficient"
         assert result.summary_params["opinion_count"] == 0
@@ -56,17 +57,22 @@ class TestInsufficientConsensusBranches:
         result = aggregate([op("a", "strong_buy", 1.0)])
         assert result.consensus_level == "insufficient"
         assert result.final_signal == "strong_buy"
+        assert result.weighted_score == pytest.approx(5.0)
+        assert result.confidence == pytest.approx(1.0)
         assert result.summary_params["opinion_count"] == 1
 
     def test_two_or_more_opinions_with_zero_total_confidence(self):
         result = aggregate([op("a", "buy", 0.0), op("b", "sell", 0.0)])
         assert result.final_signal == "hold"
+        assert result.weighted_score == pytest.approx(3.0)
         assert result.confidence == pytest.approx(0.0)
         assert result.consensus_level == "insufficient"
 
     def test_empty_input(self):
         result = aggregate([])
         assert result.final_signal == "hold"
+        assert result.weighted_score == pytest.approx(3.0)
+        assert result.confidence == pytest.approx(0.0)
         assert result.consensus_level == "insufficient"
         assert result.summary_params["total_opinion_count"] == 0
 
