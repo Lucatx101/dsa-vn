@@ -17,6 +17,13 @@ from pipeline import run_pipeline
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
+# httpx logs an INFO line per request containing the full URL. Telegram's Bot
+# API embeds the bot token in the URL path (not a header), so at INFO that
+# line leaks the live token into every run's terminal output/logs. Our own
+# "dsa-vn" logger already reports the events that matter; httpx's per-request
+# access-log lines add nothing but the credential leak, so raise its floor to
+# WARNING.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger("dsa-vn")
 
 
