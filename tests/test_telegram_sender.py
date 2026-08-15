@@ -23,6 +23,27 @@ def test_sends_single_message_and_returns_true():
     assert "TOKEN" in post.call_args.args[0]
 
 
+def test_payload_never_includes_parse_mode():
+    """Regression guard for a live-API finding: chunking is purely
+    character-count based, so a **bold**/_italic_ entity's opening marker
+    can land in one chunk while its closing marker lands in the next.
+    Telegram's legacy Markdown parser then rejects the *entire* chunk
+    containing the orphaned opening marker with HTTP 400 ("can't find end
+    of the entity..."), confirmed against the live API on a real,
+    formatting-dense dashboard. Sending plain text (no parse_mode) avoids
+    this failure mode; this test ensures parse_mode doesn't silently creep
+    back into the payload.
+    """
+    with patch("notification_sender.telegram_sender.httpx.post") as post:
+        post.return_value = _ok_response()
+        assert send_markdown("**bold** and _italic_ text", "TOKEN", "CHAT") is True
+
+    assert post.call_count == 1
+    payload = post.call_args.kwargs["json"]
+    assert "parse_mode" not in payload
+    assert payload == {"chat_id": "CHAT", "text": "**bold** and _italic_ text"}
+
+
 def test_splits_long_message_into_multiple_requests():
     long_text = "a" * (TELEGRAM_LIMIT * 2 + 10)
     with patch("notification_sender.telegram_sender.httpx.post") as post:

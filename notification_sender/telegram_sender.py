@@ -16,7 +16,19 @@ def _chunks(text: str, size: int = TELEGRAM_LIMIT) -> list[str]:
 
 
 def send_markdown(text: str, bot_token: str, chat_id: str) -> bool:
-    """Send Markdown text to a Telegram chat. Returns success as a bool.
+    """Send text to a Telegram chat. Returns success as a bool.
+
+    Sent as plain text — deliberately without ``parse_mode: "Markdown"``.
+    Chunking is purely character-count based (see ``_chunks``) and has no
+    awareness of Markdown syntax, so a ``**bold**``/``_italic_`` entity's
+    opening marker can land in one chunk while its closing marker lands in
+    the next. Telegram's legacy Markdown parser then rejects the *entire*
+    chunk containing the orphaned opening marker with HTTP 400 ("can't find
+    end of the entity..."), not just the malformed span. Confirmed live
+    against a real, formatting-dense ~11.7k-char dashboard: 2 of 3 chunks
+    were rejected with ``parse_mode: "Markdown"`` set, and all 3 succeeded
+    once it was omitted. Accepted trade-off: literal ``#``/``**``/``_``
+    characters visible to the reader beats an unreliable send.
 
     Never raises: every failure path (string handling before the network
     call, the request itself, a non-2xx response) is caught here and turned
@@ -32,7 +44,7 @@ def send_markdown(text: str, bot_token: str, chat_id: str) -> bool:
         for chunk in _chunks(text):
             response = httpx.post(
                 url,
-                json={"chat_id": chat_id, "text": chunk, "parse_mode": "Markdown"},
+                json={"chat_id": chat_id, "text": chunk},
                 timeout=TIMEOUT_SECONDS,
             )
             response.raise_for_status()
