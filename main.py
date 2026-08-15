@@ -74,7 +74,7 @@ async def _main() -> int:
         return 0
 
     if args.no_send:
-        for _, markdown in results:
+        for _, markdown, _ in results:
             print(markdown)
             print("\n---\n")
         return 0
@@ -85,7 +85,10 @@ async def _main() -> int:
         logger.error("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set. Use --no-send.")
         return 1
 
-    for symbol, markdown in results:
+    for symbol, markdown, should_send in results:
+        if not should_send:
+            logger.info("skipped %s: insufficient data, not sent to Telegram", symbol)
+            continue
         if send_markdown(markdown, token, chat_id):
             logger.info("sent %s", symbol)
         else:

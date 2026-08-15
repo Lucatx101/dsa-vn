@@ -72,11 +72,16 @@ class TestAnalyzeTicker:
             patch("pipeline.run_strategy", side_effect=lambda s, d, c: _valid_opinion(s.name)),
             patch("pipeline.run_decision", return_value="Phân tích chi tiết."),
         ):
-            md = await analyze_ticker("FPT", Exchange.HOSE, STRATEGIES, MagicMock(), None)
+            outcome = await analyze_ticker("FPT", Exchange.HOSE, STRATEGIES, MagicMock(), None)
 
-        assert md is not None
+        assert outcome is not None
+        md, should_send = outcome
         assert "FPT" in md
         assert "Phân tích chi tiết." in md
+        # A full dashboard must be sendable -- this is the positive half of
+        # the should_send contract (spec 7: only the zero-valid-opinions
+        # case is excluded from Telegram, everything else goes out).
+        assert should_send is True
 
     async def test_fetch_error_returns_none(self):
         with patch("pipeline.fetch_ticker", side_effect=FetchError("no such symbol")):
@@ -89,11 +94,16 @@ class TestAnalyzeTicker:
             patch("pipeline.run_strategy", side_effect=lambda s, d, c: _invalid_opinion(s.name)),
             patch("pipeline.run_decision") as decision,
         ):
-            md = await analyze_ticker("FPT", Exchange.HOSE, STRATEGIES, MagicMock(), None)
+            outcome = await analyze_ticker("FPT", Exchange.HOSE, STRATEGIES, MagicMock(), None)
 
-        assert md is not None
+        assert outcome is not None
+        md, should_send = outcome
         assert "không đủ dữ liệu" in md
         assert "timeout" in md
+        # The whole point of should_send: zero valid opinions must not reach
+        # Telegram (spec 7: avoid noise), even though analyze_ticker still
+        # renders and returns a Markdown card for it (e.g. for --no-send).
+        assert should_send is False
         decision.assert_not_called()
 
     async def test_every_strategy_is_invoked(self):
@@ -124,7 +134,7 @@ class TestRunPipeline:
                 ["FPT", "VNM"], Exchange.HOSE, STRATEGIES, MagicMock(), 4
             )
 
-        assert [symbol for symbol, _ in results] == ["FPT", "VNM"]
+        assert [symbol for symbol, _, _ in results] == ["FPT", "VNM"]
 
     async def test_one_bad_ticker_does_not_stop_the_others(self):
         def fetch(symbol, exchange, **kwargs):
@@ -141,7 +151,7 @@ class TestRunPipeline:
                 ["BAD", "FPT"], Exchange.HOSE, STRATEGIES, MagicMock(), 4
             )
 
-        assert [symbol for symbol, _ in results] == ["FPT"]
+        assert [symbol for symbol, _, _ in results] == ["FPT"]
 
     async def test_unexpected_exception_does_not_stop_the_others(self):
         # Task 9 addition: run_pipeline's loop is defense-in-depth against an
@@ -167,4 +177,4 @@ class TestRunPipeline:
                 ["BAD", "FPT"], Exchange.HOSE, STRATEGIES, MagicMock(), 4
             )
 
-        assert [symbol for symbol, _ in results] == ["FPT"]
+        assert [symbol for symbol, _, _ in results] == ["FPT"]

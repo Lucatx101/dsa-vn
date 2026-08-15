@@ -31,8 +31,14 @@ async def analyze_ticker(
     strategies: list[Strategy],
     client,
     semaphore: asyncio.Semaphore | None,
-) -> str | None:
-    """Analyze one ticker. Returns Markdown, or None if the ticker was skipped."""
+) -> tuple[str, bool] | None:
+    """Analyze one ticker.
+
+    Returns (markdown, should_send), or None if the ticker was skipped
+    entirely (FetchError). should_send is False for the "insufficient
+    data" render -- spec 7 says a ticker with zero valid opinions must not
+    generate Telegram noise -- and True for a full dashboard.
+    """
     try:
         data = await asyncio.to_thread(fetch_ticker, symbol, exchange)
     except FetchError as exc:
@@ -47,14 +53,14 @@ async def analyze_ticker(
     valid, invalid = partition_opinions(opinions)
     if not valid:
         logger.warning("%s: no valid opinions from %d strategies", symbol, len(opinions))
-        return render_insufficient(symbol, invalid)
+        return render_insufficient(symbol, invalid), False
 
     synthesis = aggregate(opinions)
     decision_text = await asyncio.to_thread(
         run_decision, data, synthesis, valid, client
     )
 
-    return render_dashboard(data, synthesis, valid, decision_text)
+    return render_dashboard(data, synthesis, valid, decision_text), True
 
 
 async def run_pipeline(
@@ -63,10 +69,16 @@ async def run_pipeline(
     strategies: list[Strategy],
     client,
     max_concurrent: int,
-) -> list[tuple[str, str]]:
-    """Analyze every symbol. Returns [(symbol, markdown)] for tickers that produced one."""
+) -> list[tuple[str, str, bool]]:
+    """Analyze every symbol.
+
+    Returns [(symbol, markdown, should_send)] for tickers that produced a
+    result. should_send is False for the zero-valid-opinions case so
+    callers can exclude it from Telegram (spec 7: avoid noise) while still
+    surfacing it elsewhere, e.g. under --no-send.
+    """
     semaphore = asyncio.Semaphore(max_concurrent)
-    results: list[tuple[str, str]] = []
+    results: list[tuple[str, str, bool]] = []
 
     for symbol in symbols:
         # Defense-in-depth: analyze_ticker() already handles the *expected*
@@ -78,12 +90,13 @@ async def run_pipeline(
         # watchlist run, even if some downstream function's "never raise"
         # contract is ever broken by a later change.
         try:
-            markdown = await analyze_ticker(symbol, exchange, strategies, client, semaphore)
+            outcome = await analyze_ticker(symbol, exchange, strategies, client, semaphore)
         except Exception as exc:  # noqa: BLE001 - see comment above
             logger.error("unexpected error analyzing %s: %s", symbol, exc)
             continue
 
-        if markdown is not None:
-            results.append((symbol, markdown))
+        if outcome is not None:
+            markdown, should_send = outcome
+            results.append((symbol, markdown, should_send))
 
     return results
