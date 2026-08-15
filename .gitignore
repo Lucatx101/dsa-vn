@@ -1,5 +1,8 @@
 .superpowers/
 
+# Claude Code harness session lock file, not project content.
+.claude/
+
 .env
 __pycache__/
 *.py[cod]
