@@ -76,32 +76,35 @@ def run_decision(
     client,
 ) -> str:
     """Return the Vietnamese dashboard body, or a fallback message on failure."""
-    params = synthesis.summary_params
-    user_prompt = USER_TEMPLATE.format(
-        symbol=data.symbol,
-        market_rules=market_rules_text(),
-        data_summary=history_summary(data),
-        final_signal=synthesis.final_signal,
-        weighted_score=f"{synthesis.weighted_score:.2f}",
-        confidence=f"{synthesis.confidence:.2f}",
-        consensus_level=synthesis.consensus_level,
-        conflict_severity=synthesis.conflict_severity,
-        supporting=", ".join(synthesis.supporting_skills) or "(không có)",
-        opposing=", ".join(synthesis.opposing_skills) or "(không có)",
-        n_valid=params.get("opinion_count", 0),
-        n_invalid=params.get("invalid_opinion_count", 0),
-        n_total=params.get("total_opinion_count", 0),
-        opinion_details=_format_opinions(opinions),
-    )
-
     try:
+        params = synthesis.summary_params
+        user_prompt = USER_TEMPLATE.format(
+            symbol=data.symbol,
+            market_rules=market_rules_text(),
+            data_summary=history_summary(data),
+            final_signal=synthesis.final_signal,
+            weighted_score=f"{synthesis.weighted_score:.2f}",
+            confidence=f"{synthesis.confidence:.2f}",
+            consensus_level=synthesis.consensus_level,
+            conflict_severity=synthesis.conflict_severity,
+            supporting=", ".join(synthesis.supporting_skills) or "(không có)",
+            opposing=", ".join(synthesis.opposing_skills) or "(không có)",
+            n_valid=params.get("opinion_count", 0),
+            n_invalid=params.get("invalid_opinion_count", 0),
+            n_total=params.get("total_opinion_count", 0),
+            opinion_details=_format_opinions(opinions),
+        )
+
         response = client.messages.create(
             model=decision_model(),
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
-    except Exception as exc:  # noqa: BLE001 - degrade to a visible message
+    except Exception as exc:  # noqa: BLE001 - degrade to a visible message; covers
+        # both prompt construction (history_summary/.format) and the API call
+        # itself, since run_decision must never raise regardless of which
+        # step fails.
         logger.error("decision agent failed for %s: %s", data.symbol, exc)
         return f"_Không tạo được phần phân tích: lỗi khi gọi mô hình ({exc})._"
 

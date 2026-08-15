@@ -112,3 +112,52 @@ def test_refusal_returns_fallback():
     client = _client_returning("", stop_reason="refusal")
     result = run_decision(_data(), _synthesis(), _opinions(), client)
     assert "từ chối" in result.lower() or "refusal" in result.lower()
+
+
+def test_no_text_blocks_returns_fallback():
+    # A response whose content has no text-type block (e.g. only a
+    # "thinking" block) must not silently render as an empty string via
+    # "\n".join([]).strip() == "". This guards the `if not texts:` check
+    # against a regression like `if texts is None:`, which would never be
+    # true since the list comprehension can only ever produce a list.
+    client = MagicMock()
+    block = MagicMock()
+    block.type = "thinking"
+    block.text = "nội bộ, không phải câu trả lời cuối"
+    response = MagicMock()
+    response.content = [block]
+    response.stop_reason = "end_turn"
+    client.messages.create.return_value = response
+
+    result = run_decision(_data(), _synthesis(), _opinions(), client)
+
+    assert result == "_Mô hình không trả về nội dung văn bản._"
+
+
+def test_prompt_construction_failure_returns_fallback_not_exception():
+    # history_summary() indexes into the last row of the OHLCV history
+    # (e.g. close.iloc[-1]); an empty history raises IndexError there.
+    # fetch_ticker() never produces an empty history today, but run_decision
+    # must still degrade to a fallback string rather than raise, since a
+    # future caller (the Task 9 pipeline) has no try/except above this call.
+    empty_data = TickerData(
+        symbol="FPT",
+        exchange=Exchange.HOSE,
+        history=pd.DataFrame(
+            {"time": [], "open": [], "high": [], "low": [], "close": [], "volume": []}
+        ),
+        board={},
+        reference_price=100.0,
+        board_ceiling=None,
+        board_floor=None,
+        foreign_buy_volume=None,
+        foreign_sell_volume=None,
+        current_room=None,
+        total_room=None,
+    )
+    client = _client_returning("ok")
+
+    result = run_decision(empty_data, _synthesis(), _opinions(), client)
+
+    assert "lỗi" in result.lower()
+    client.messages.create.assert_not_called()
