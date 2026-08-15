@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
+
 from notification_sender.telegram_sender import TELEGRAM_LIMIT, send_markdown
 
 
@@ -36,6 +38,28 @@ def test_returns_false_on_http_error_without_raising():
     with patch("notification_sender.telegram_sender.httpx.post") as post:
         post.side_effect = RuntimeError("connection refused")
         assert send_markdown("xin chào", "TOKEN", "CHAT") is False
+
+
+def test_returns_false_on_non_2xx_response_without_raising():
+    """Distinct failure mode from the network-level test above: httpx.post()
+    itself succeeds, but the response is a genuine Telegram API rejection
+    (e.g. bad bot token -> 401), which raise_for_status() turns into an
+    HTTPStatusError. This proves raise_for_status() is actually called and
+    that its exception is caught rather than a future refactor silently
+    dropping or misplacing that call.
+    """
+    request = httpx.Request("POST", "https://api.telegram.org/botTOKEN/sendMessage")
+    response = MagicMock()
+    response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "401 Unauthorized",
+        request=request,
+        response=httpx.Response(401, request=request),
+    )
+    with patch("notification_sender.telegram_sender.httpx.post") as post:
+        post.return_value = response
+        assert send_markdown("xin chào", "TOKEN", "CHAT") is False
+
+    assert post.call_count == 1
 
 
 def test_empty_text_is_a_noop_returning_true():
