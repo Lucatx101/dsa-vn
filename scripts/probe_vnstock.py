@@ -28,7 +28,7 @@ def probe_history() -> None:
 
 def probe_price_board() -> None:
     print("\n=== Trading.price_board(source='vci') ===")
-    df = Trading(source="vci").price_board(symbols_list=[SYMBOL, "VNM"])
+    df = Trading(source="vci", random_agent=True).price_board(symbols_list=[SYMBOL, "VNM"])
     print("columns:", list(df.columns))
     print("shape:", df.shape)
     print(df.head())
@@ -40,7 +40,7 @@ def probe_foreign_trade_is_unavailable() -> None:
     """Confirm foreign_trade() is a sponsor-only feature, as the source suggests."""
     print("\n=== Trading.foreign_trade() (expected to FAIL) ===")
     try:
-        df = Trading(source="vci", symbol=SYMBOL).foreign_trade()
+        df = Trading(source="vci", symbol=SYMBOL, random_agent=True).foreign_trade()
         print("UNEXPECTED SUCCESS - columns:", list(df.columns))
     except Exception as exc:  # noqa: BLE001 - probing, want the raw failure
         print(f"failed as expected: {type(exc).__name__}: {exc}")
